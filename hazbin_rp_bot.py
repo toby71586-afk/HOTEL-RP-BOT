@@ -11,14 +11,14 @@ from datetime import datetime, timedelta
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 OPENROUTER_KEY = os.getenv("OPENROUTER_KEY")
-AI_MODEL = os.getenv("AI_MODEL", "inclusionai/ling-3.0-flash:free")
+# Use the free router - automatically picks working free models
+AI_MODEL = os.getenv("AI_MODEL", "openrouter/free")
 
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ───── ACTIVE CONVERSATIONS ─────
-# Format: {(channel_id, user_id): {"character": name, "last_active": datetime}}
 active_conversations = {}
 CONVERSATION_TIMEOUT = timedelta(minutes=10)
 
@@ -65,7 +65,7 @@ SYSTEM_PROMPTS = {
         "You are Niffty, a tiny one-eyed demon. You love cleaning, stabbing, and bad boys. "
         "You speak in short, hyperactive bursts. You're always moving. "
         "You work for Alastor and adore him. You don't sleep. "
-        "Keep responses VERY short — 1-2 sentences max. No filter."
+        "Keep responses VERY short - 1-2 sentences max. No filter."
     ),
     "Husk": (
         "You are Husk, a winged cat demon and Hotel bartender. "
@@ -121,7 +121,7 @@ SYSTEM_PROMPTS = {
     "Zeezi": (
         "You are Zeezi, who runs Hell's underground entertainment scene. "
         "You are energetic, street-smart, and authentic. You throw the best parties. "
-        "You knew Angel Dust before Valentino. No contracts — only handshakes. "
+        "You knew Angel Dust before Valentino. No contracts - only handshakes. "
         "Keep responses under 3 sentences unless asked."
     )
 }
@@ -223,8 +223,6 @@ FALLBACK_RESPONSES = {
     ]
 }
 
-# ───── CHARACTER METADATA ─────
-
 CHARACTER_INFO = {
     "Charlie": {"color": 0xCC0000, "emoji": "👑"},
     "Vaggie": {"color": 0x8B008B, "emoji": "⚔️"},
@@ -259,18 +257,19 @@ def get_character(name):
 def build_messages(character_name, user_message, user_id):
     system_prompt = SYSTEM_PROMPTS[character_name]
     history = conversations[character_name][user_id]
-    
     messages = [{"role": "system", "content": system_prompt}]
     for entry in history:
         messages.append(entry)
     messages.append({"role": "user", "content": user_message})
-    
     return messages
 
 async def get_ai_response(character_name, user_message, user_id):
+    global OPENROUTER_KEY
     if not OPENROUTER_KEY:
+        print("[AI] No OPENROUTER_KEY set - using fallback")
         return None
     
+    print(f"[AI] Attempting AI response for {character_name}...")
     messages = build_messages(character_name, user_message, user_id)
     
     headers = {
@@ -294,22 +293,24 @@ async def get_ai_response(character_name, user_message, user_id):
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers=headers,
                 json=payload,
-                timeout=aiohttp.ClientTimeout(total=15)
+                timeout=aiohttp.ClientTimeout(total=20)
             ) as resp:
+                print(f"[AI] Response status: {resp.status}")
                 if resp.status == 200:
                     data = await resp.json()
                     content = data["choices"][0]["message"]["content"].strip()
                     content = content.strip('"').strip("'")
+                    print(f"[AI] Success! Response: {content[:80]}...")
                     return content
                 else:
                     error_text = await resp.text()
-                    print(f"OpenRouter error {resp.status}: {error_text[:200]}")
+                    print(f"[AI] ERROR {resp.status}: {error_text[:300]}")
                     return None
     except asyncio.TimeoutError:
-        print("OpenRouter API timeout")
+        print("[AI] TIMEOUT - OpenRouter took too long")
         return None
     except Exception as e:
-        print(f"OpenRouter exception: {e}")
+        print(f"[AI] EXCEPTION: {type(e).__name__}: {e}")
         return None
 
 def get_fallback_response(character_name):
@@ -321,8 +322,10 @@ async def generate_response(character_name, user_message, user_id):
     
     if ai_response:
         response = ai_response
+        print(f"[RESPONSE] Using AI for {character_name}")
     else:
         response = get_fallback_response(character_name)
+        print(f"[RESPONSE] Using fallback for {character_name}")
     
     history = conversations[character_name][user_id]
     history.append({"role": "user", "content": user_message})
@@ -342,12 +345,17 @@ def is_stop_command(text):
 
 @bot.event
 async def on_ready():
-    print(f"{bot.user} is online!")
-    ai_status = "AI ENABLED" if OPENROUTER_KEY else "AI DISABLED (fallback)"
-    print(f"Status: {ai_status}")
+    print(f"=== BOT ONLINE ===")
+    print(f"Bot: {bot.user}")
+    if OPENROUTER_KEY:
+        print(f"Status: AI ENABLED (key length: {len(OPENROUTER_KEY)} chars)")
+        print(f"Model: {AI_MODEL}")
+    else:
+        print("Status: AI DISABLED - using fallback responses")
+        print("Set OPENROUTER_KEY in Railway env vars to enable AI!")
     try:
         synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} command(s)")
+        print(f"Synced {len(synced)} slash command(s)")
     except Exception as e:
         print(f"Sync failed: {e}")
 
@@ -356,21 +364,18 @@ async def on_message(message):
     if message.author.bot:
         return
     
-    # Check if this user has an active conversation in this channel
     conv_key = (message.channel.id, message.author.id)
     
     if conv_key in active_conversations:
         conv = active_conversations[conv_key]
         char_name = conv["character"]
         
-        # Check timeout
         if datetime.now() - conv["last_active"] > CONVERSATION_TIMEOUT:
             del active_conversations[conv_key]
-            await message.channel.send(f"*{char_name} wanders off, bored...* Use `/talk {char_name} [message]` to start again!")
+            await message.channel.send(f"*{char_name} wanders off, bored...* Use `/chat {char_name}` to start again!")
             await bot.process_commands(message)
             return
         
-        # Check if user wants to stop
         if is_stop_command(message.content):
             del active_conversations[conv_key]
             info = CHARACTER_INFO.get(char_name, {"color": 0x9B59B6, "emoji": "💬"})
@@ -383,7 +388,6 @@ async def on_message(message):
             await bot.process_commands(message)
             return
         
-        # Generate response
         conv["last_active"] = datetime.now()
         async with message.channel.typing():
             response = await generate_response(char_name, message.content, str(message.author.id))
@@ -396,11 +400,9 @@ async def on_message(message):
         )
         embed.set_footer(text=f"{message.author.name} → {char_name}")
         await message.channel.send(embed=embed)
-        
         await bot.process_commands(message)
         return
     
-    # Check if this is a reply to a bot message
     if message.reference and message.reference.message_id:
         try:
             replied_msg = await message.channel.fetch_message(message.reference.message_id)
@@ -410,7 +412,6 @@ async def on_message(message):
                     if char_name in embed_title:
                         async with message.channel.typing():
                             response = await generate_response(char_name, message.content, str(message.author.id))
-                        
                         info = CHARACTER_INFO.get(char_name, {"color": 0x9B59B6, "emoji": "💬"})
                         resp_embed = discord.Embed(
                             title=f"{info['emoji']} {char_name} replies:",
@@ -463,9 +464,7 @@ async def talk(interaction: discord.Interaction, character: str, message: str):
         return
     
     info = CHARACTER_INFO.get(char_key, {"color": 0x9B59B6, "emoji": "💬"})
-    
     await interaction.response.defer()
-    
     response = await generate_response(char_key, message, str(interaction.user.id))
     
     embed = discord.Embed(
@@ -486,7 +485,6 @@ async def talk_autocomplete(interaction: discord.Interaction, current: str):
 
 @bot.tree.command(name="chat", description="Start a continuous chat with a character! Just type after this!")
 async def chat(interaction: discord.Interaction, character: str):
-    """Start a continuous conversation with a character."""
     char_key = get_character(character)
     if not char_key:
         names = "\n".join(SYSTEM_PROMPTS.keys())
@@ -494,8 +492,6 @@ async def chat(interaction: discord.Interaction, character: str):
         return
     
     info = CHARACTER_INFO.get(char_key, {"color": 0x9B59B6, "emoji": "💬"})
-    
-    # Activate conversation mode
     conv_key = (interaction.channel_id, interaction.user.id)
     active_conversations[conv_key] = {
         "character": char_key,
@@ -524,7 +520,6 @@ async def chat_autocomplete(interaction: discord.Interaction, current: str):
 @bot.tree.command(name="stop", description="Stop the current conversation")
 async def stop(interaction: discord.Interaction):
     conv_key = (interaction.channel_id, interaction.user.id)
-    
     if conv_key in active_conversations:
         char_name = active_conversations[conv_key]["character"]
         del active_conversations[conv_key]
