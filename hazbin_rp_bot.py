@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 OPENROUTER_KEY = os.getenv("OPENROUTER_KEY")
-AI_MODEL = os.getenv("AI_MODEL", "google/gemini-2.0-flash-lite-preview-02-05:free")
+AI_MODEL = os.getenv("AI_MODEL", "inclusionai/ling-3.0-flash:free")
 
 intents = discord.Intents.default()
 intents.message_content = True
