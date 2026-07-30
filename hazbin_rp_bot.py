@@ -576,3 +576,55 @@ async def rp_help(interaction: discord.Interaction):
 
 if __name__ == "__main__":
     bot.run(DISCORD_TOKEN)
+
+@bot.tree.command(name="ping", description="Check bot status")
+async def ping(interaction: discord.Interaction):
+    has_key = "✅ YES" if OPENROUTER_KEY else "❌ NO"
+    key_len = len(OPENROUTER_KEY) if OPENROUTER_KEY else 0
+    embed = discord.Embed(
+        title="🏓 Pong! Bot Status",
+        description=f"**Online:** ✅\n"
+                    f"**AI Key Set:** {has_key}\n"
+                    f"**Key Length:** {key_len} chars\n"
+                    f"**Model:** `{AI_MODEL}`\n"
+                    f"**Characters:** {len(SYSTEM_PROMPTS)}\n"
+                    f"**Active Conversations:** {len(active_conversations)}",
+        color=0x2ECC71
+    )
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="test-or", description="Test OpenRouter API connection")
+async def test_or(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+    
+    if not OPENROUTER_KEY:
+        await interaction.followup.send("❌ No OPENROUTER_KEY set!", ephemeral=True)
+        return
+    
+    try:
+        headers = {
+            "Authorization": f"Bearer {OPENROUTER_KEY}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/toby71586-afk/HOTEL-RP-BOT"
+        }
+        payload = {
+            "model": "openrouter/free",
+            "messages": [{"role": "user", "content": "Say 'OK' followed by a single word greeting."}],
+            "max_tokens": 20
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=15)
+            ) as resp:
+                text = await resp.text()
+                if resp.status == 200:
+                    data = json.loads(text)
+                    reply = data["choices"][0]["message"]["content"].strip()
+                    await interaction.followup.send(f"✅ **OpenRouter OK!**\nResponse: `{reply}`", ephemeral=True)
+                else:
+                    await interaction.followup.send(f"❌ **OpenRouter error {resp.status}**\n```\n{text[:300]}\n```", ephemeral=True)
+    except Exception as e:
+        await interaction.followup.send(f"❌ **Exception:** `{e}`", ephemeral=True)
