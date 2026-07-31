@@ -827,26 +827,37 @@ async def clear_messages(interaction: discord.Interaction, amount: int = 20, bot
   """Delete messages in the current channel."""
   await interaction.response.defer(ephemeral=True)
   
-  # Only works in server channels, not DMs
-  if not interaction.guild:
-    await interaction.followup.send("❌ `/clear` only works in server channels, not DMs!", ephemeral=True)
-    return
+  is_dm = not interaction.guild
+  total = 0
   
   try:
-    if bot_only:
-      # Only delete messages from this bot - much faster
-      total = 0
+    if is_dm:
+      # DMs don't support purge - delete one by one
+      limit = 1000 if amount == 0 else min(amount, 1000)
+      async for msg in interaction.channel.history(limit=limit):
+        if bot_only and msg.author != bot.user:
+          continue
+        try:
+          await msg.delete()
+          total += 1
+        except:
+          pass
+        if amount > 0 and total >= amount:
+          break
+      msg_text = f"🧹 Deleted **{total}** messages from DMs!" if total else "No messages found to delete."
+      await interaction.followup.send(msg_text, ephemeral=True)
+    elif bot_only:
+      # Server - only bot messages
       limit = 1000 if amount == 0 else min(amount, 1000)
       while True:
         deleted = await interaction.channel.purge(limit=min(100, limit - total), check=lambda m: m.author == bot.user)
         total += len(deleted)
         if len(deleted) < 100 or (amount > 0 and total >= amount):
           break
-      msg = f"🧹 Deleted **{total}** bot messages!" if total else "No bot messages found to delete."
-      await interaction.followup.send(msg, ephemeral=True)
+      msg_text = f"🧹 Deleted **{total}** bot messages!" if total else "No bot messages found to delete."
+      await interaction.followup.send(msg_text, ephemeral=True)
     elif amount == 0:
       # Delete everything - batch by 1000
-      total = 0
       while True:
         deleted = await interaction.channel.purge(limit=1000)
         total += len(deleted)
