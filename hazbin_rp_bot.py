@@ -487,7 +487,6 @@ async def talk_autocomplete(interaction: discord.Interaction, current: str):
 
 @bot.tree.command(name="chat", description="Start a continuous chat with a Hazbin Hotel character!")
 @app_commands.describe(character="Which character?", private="Chat in DMs for privacy? (default: No)")
-@app_commands.autocomplete(character=chat_autocomplete)
 async def chat(interaction: discord.Interaction, character: str, private: bool = False):
   char_key = get_character(character)
   if not char_key:
