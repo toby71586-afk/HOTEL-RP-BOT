@@ -749,5 +749,23 @@ async def explore_private(interaction: discord.Interaction):
   except discord.Forbidden:
     await interaction.response.send_message("❌ Can't DM you! Enable DMs from server members in your privacy settings.", ephemeral=True)
 
+
+
+@bot.tree.command(name="clear", description="Delete recent messages in this channel (up to 100)")
+@app_commands.describe(amount="How many messages to delete? (default: 20, max: 100)")
+async def clear_messages(interaction: discord.Interaction, amount: int = 20):
+  """Delete recent messages in the current channel."""
+  amount = min(max(amount, 1), 100)
+  
+  await interaction.response.defer(ephemeral=True)
+  
+  try:
+    deleted = await interaction.channel.purge(limit=amount)
+    await interaction.followup.send(f"🧹 Deleted **{len(deleted)}** messages!", ephemeral=True)
+  except discord.Forbidden:
+    await interaction.followup.send("❌ I don't have permission to delete messages here!", ephemeral=True)
+  except discord.HTTPException as e:
+    await interaction.followup.send(f"❌ Error deleting messages: `{e}`", ephemeral=True)
+
 if __name__ == "__main__":
   bot.run(DISCORD_TOKEN)
