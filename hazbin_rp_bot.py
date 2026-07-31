@@ -827,6 +827,11 @@ async def clear_messages(interaction: discord.Interaction, amount: int = 20, bot
   """Delete messages in the current channel."""
   await interaction.response.defer(ephemeral=True)
   
+  # Only works in server channels, not DMs
+  if not interaction.guild:
+    await interaction.followup.send("❌ `/clear` only works in server channels, not DMs!", ephemeral=True)
+    return
+  
   try:
     if bot_only:
       # Only delete messages from this bot - much faster
