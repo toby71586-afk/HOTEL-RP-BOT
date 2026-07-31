@@ -343,6 +343,35 @@ def is_stop_command(text):
   stop_words = ["stop", "bye", "goodbye", "end", "done", "finish", "quit", "exit", "later", "see ya"]
   return text.lower().strip() in stop_words or text.lower().strip().rstrip("!.") in stop_words
 
+def detect_character_switch(text):
+    """Check if user is trying to switch characters mid-conversation with *turns to X* style text"""
+    lower = text.lower()
+    # Patterns: *turns to X*, *looks at X*, *to X*, *X enters*, *X walks in*, etc.
+    for char_name in SYSTEM_PROMPTS.keys():
+        char_lower = char_name.lower()
+        patterns = [
+            f"*turns to {char_lower}*",
+            f"*looks at {char_lower}*",
+            f"*to {char_lower}*",
+            f"*{char_lower} enters*",
+            f"*{char_lower} walks*",
+            f"*{char_lower} appears*",
+            f"*{char_lower} joins*",
+            f"*turns to {char_lower}",
+            f"*looks at {char_lower}",
+            f"*to {char_lower}",
+            f"*{char_lower} enters",
+            f"*{char_lower} walks",
+            f"*{char_lower} appears",
+            f"*{char_lower} joins",
+            f"turns to {char_lower}*",
+            f"looks at {char_lower}*",
+        ]
+        for pattern in patterns:
+            if pattern in lower:
+                return char_name
+    return None
+
 # ───── EVENTS ─────
 
 @bot.event
@@ -386,6 +415,24 @@ async def on_message(message):
         description=f"*{char_name} nods and heads off.* Talk to you later!",
         color=info['color']
       )
+      await message.channel.send(embed=embed)
+      await bot.process_commands(message)
+      return
+    
+    # Check if user wants to switch characters mid-conversation
+    switch_target = detect_character_switch(message.content)
+    if switch_target and switch_target != char_name:
+      # Switch to the new character
+      old_char = char_name
+      conv["character"] = switch_target
+      conv["last_active"] = datetime.now()
+      info = CHARACTER_INFO.get(switch_target, {"color": 0x9B59B6, "emoji": "💬"})
+      embed = discord.Embed(
+        title=f"{info['emoji']} {switch_target} notices you:",
+        description=f"*{switch_target} steps forward with a curious look.*\n\nWell, well... what's this?",
+        color=info['color']
+      )
+      embed.set_footer(text=f"{message.author.name} → {switch_target}")
       await message.channel.send(embed=embed)
       await bot.process_commands(message)
       return
