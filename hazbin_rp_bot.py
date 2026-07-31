@@ -752,13 +752,27 @@ async def explore_private(interaction: discord.Interaction):
 
 
 @bot.tree.command(name="clear", description="Delete messages in this channel")
-@app_commands.describe(amount="Number to delete (default: 20, use 0 for ALL, max: 1000)")
-async def clear_messages(interaction: discord.Interaction, amount: int = 20):
+@app_commands.describe(
+  amount="Number to delete (default: 20, use 0 for ALL, max: 1000)",
+  bot_only="Only delete the bot's messages? (True/False, default: False)"
+)
+async def clear_messages(interaction: discord.Interaction, amount: int = 20, bot_only: bool = False):
   """Delete messages in the current channel."""
   await interaction.response.defer(ephemeral=True)
   
   try:
-    if amount == 0:
+    if bot_only:
+      # Only delete messages from this bot - much faster
+      total = 0
+      limit = 1000 if amount == 0 else min(amount, 1000)
+      while True:
+        deleted = await interaction.channel.purge(limit=min(100, limit - total), check=lambda m: m.author == bot.user)
+        total += len(deleted)
+        if len(deleted) < 100 or (amount > 0 and total >= amount):
+          break
+      msg = f"🧹 Deleted **{total}** bot messages!" if total else "No bot messages found to delete."
+      await interaction.followup.send(msg, ephemeral=True)
+    elif amount == 0:
       # Delete everything - batch by 1000
       total = 0
       while True:
