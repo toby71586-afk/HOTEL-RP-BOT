@@ -10,9 +10,9 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-OPENROUTER_KEY = os.getenv("OPENROUTER_KEY")
+GEMINI_KEY = os.getenv("GEMINI_KEY")
 # Use the free router - automatically picks working free models
-AI_MODEL = os.getenv("AI_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free")
+AI_MODEL = os.getenv("AI_MODEL", "gemini-2.0-flash")
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -282,57 +282,74 @@ def build_messages(character_name, user_message, user_id):
   return messages
 
 async def get_ai_response(character_name, user_message, user_id):
-  global OPENROUTER_KEY
-  if not OPENROUTER_KEY:
-    print("[AI] No OPENROUTER_KEY set - using fallback")
+  global GEMINI_KEY
+  if not GEMINI_KEY:
+    print("[AI] No GEMINI_KEY set - using fallback")
     return None
   
-  print(f"[AI] Attempting AI response for {character_name}...")
+  print(f"[AI] Attempting Gemini response for {character_name}...")
   messages = build_messages(character_name, user_message, user_id)
   
-  headers = {
-    "Authorization": f"Bearer {OPENROUTER_KEY}",
-    "Content-Type": "application/json",
-    "HTTP-Referer": "https://github.com/toby71586-afk/HOTEL-RP-BOT",
-    "X-Title": "Hazbin Hotel RP Bot"
-  }
+  # Convert to Gemini format
+  gemini_contents = []
+  system_text = ""
+  for i, msg in enumerate(messages):
+    if i == 0 and msg["role"] == "system":
+      system_text = msg["content"]
+      continue
+    role = "model" if msg["role"] == "assistant" else "user"
+    gemini_contents.append({
+      "role": role,
+      "parts": [{"text": msg["content"]}]
+    })
   
   payload = {
-    "model": AI_MODEL,
-    "messages": messages,
-    "max_tokens": 600,
-    "temperature": 1.0,
-    "top_p": 0.95,
-    "safety": False,
-    "transforms": ["middle-out"]
+    "contents": gemini_contents,
+    "generationConfig": {
+      "maxOutputTokens": 1500,
+      "temperature": 1.0,
+      "topP": 0.95
+    },
+    "safetySettings": [
+      {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+      {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+      {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+      {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+    ]
   }
+  if system_text:
+    payload["system_instruction"] = {"parts": [{"text": system_text}]}
+  
+  url = f"https://generativelanguage.googleapis.com/v1beta/models/{AI_MODEL}:generateContent?key={GEMINI_KEY}"
   
   try:
     async with aiohttp.ClientSession() as session:
       async with session.post(
-        "https://openrouter.ai/api/v1/chat/completions",
-        headers=headers,
+        url,
         json=payload,
-        timeout=aiohttp.ClientTimeout(total=20)
+        timeout=aiohttp.ClientTimeout(total=30)
       ) as resp:
-        print(f"[AI] Response status: {resp.status}")
+        print(f"[AI] Gemini response status: {resp.status}")
         if resp.status == 200:
           data = await resp.json()
-          content = data["choices"][0]["message"]["content"].strip()
-          content = content.strip('"').strip("'")
-          print(f"[AI] Success! Response: {content[:80]}...")
-          return content
+          try:
+            text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            text = text.strip('"').strip("'")
+            print(f"[AI] Success! Response: {text[:80]}...")
+            return text
+          except (KeyError, IndexError) as e:
+            print(f"[AI] Failed to parse response: {data}")
+            return None
         else:
           error_text = await resp.text()
           print(f"[AI] ERROR {resp.status}: {error_text[:300]}")
           return None
   except asyncio.TimeoutError:
-    print("[AI] TIMEOUT - OpenRouter took too long")
+    print("[AI] TIMEOUT - Gemini took too long")
     return None
   except Exception as e:
     print(f"[AI] EXCEPTION: {type(e).__name__}: {e}")
     return None
-
 def get_fallback_response(character_name):
   responses = FALLBACK_RESPONSES.get(character_name, ["..."])
   return random.choice(responses)
@@ -367,12 +384,12 @@ def is_stop_command(text):
 async def on_ready():
   print(f"=== BOT ONLINE ===")
   print(f"Bot: {bot.user}")
-  if OPENROUTER_KEY:
-    print(f"Status: AI ENABLED (key length: {len(OPENROUTER_KEY)} chars)")
+  if GEMINI_KEY:
+    print(f"Status: GEMINI ENABLED (key length: {len(GEMINI_KEY)} chars)")
     print(f"Model: {AI_MODEL}")
   else:
-    print("Status: AI DISABLED - using fallback responses")
-    print("Set OPENROUTER_KEY in Railway env vars to enable AI!")
+    print("Status: GEMINI DISABLED - using fallback responses")
+    print("Set GEMINI_KEY in Railway env vars to enable AI!")
   try:
     synced = await bot.tree.sync()
     print(f"Synced {len(synced)} slash command(s)")
@@ -596,7 +613,7 @@ async def characters(interaction: discord.Interaction):
 
 @bot.tree.command(name="rp-help", description="How to use the RP bot")
 async def rp_help(interaction: discord.Interaction):
-  ai_status = "✅ **AI-POWERED**" if OPENROUTER_KEY else "⚠️ **Fallback mode** (set OPENROUTER_KEY for AI)"
+  ai_status = "✅ **GEMINI-POWERED**" if GEMINI_KEY else "⚠️ **Fallback mode** (set GEMINI_KEY for AI)"
   embed = discord.Embed(
     title="📖 RP Bot Help",
     description=f"**Status:** {ai_status}\n\n"
@@ -623,8 +640,8 @@ async def rp_help(interaction: discord.Interaction):
 
 @bot.tree.command(name="ping", description="Check bot status")
 async def ping(interaction: discord.Interaction):
-  has_key = "YES" if OPENROUTER_KEY else "NO"
-  key_len = len(OPENROUTER_KEY) if OPENROUTER_KEY else 0
+  has_key = "YES" if GEMINI_KEY else "NO"
+  key_len = len(GEMINI_KEY) if GEMINI_KEY else 0
   embed = discord.Embed(
     title="Pong! Bot Status",
     description=f"**Online:** Yes\n"
@@ -637,37 +654,31 @@ async def ping(interaction: discord.Interaction):
   )
   await interaction.response.send_message(embed=embed, ephemeral=True)
 
-@bot.tree.command(name="test-or", description="Test OpenRouter API connection")
-async def test_or(interaction: discord.Interaction):
+@bot.tree.command(name="test-ai", description="Test Gemini AI connection")
+async def test_ai(interaction: discord.Interaction):
   await interaction.response.defer(ephemeral=True)
-  if not OPENROUTER_KEY:
-    await interaction.followup.send("No OPENROUTER_KEY set!", ephemeral=True)
+  if not GEMINI_KEY:
+    await interaction.followup.send("No GEMINI_KEY set!", ephemeral=True)
     return
   try:
-    headers = {
-      "Authorization": f"Bearer {OPENROUTER_KEY}",
-      "Content-Type": "application/json",
-      "HTTP-Referer": "https://github.com/toby71586-afk/HOTEL-RP-BOT"
-    }
     payload = {
-      "model": "openrouter/free",
-      "messages": [{"role": "user", "content": "Say 'OK' followed by a single word greeting."}],
-      "max_tokens": 20
+      "contents": [{"parts": [{"text": "Say OK followed by a single word greeting."}]}],
+      "generationConfig": {"maxOutputTokens": 20}
     }
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_KEY}"
     async with aiohttp.ClientSession() as session:
       async with session.post(
-        "https://openrouter.ai/api/v1/chat/completions",
-        headers=headers,
+        url,
         json=payload,
-        timeout=aiohttp.ClientTimeout(total=15)
+        timeout=aiohttp.ClientTimeout(total=10)
       ) as resp:
-        text = await resp.text()
         if resp.status == 200:
-          data = json.loads(text)
-          reply = data["choices"][0]["message"]["content"].strip()
-          await interaction.followup.send(f"OpenRouter OK! Response: `{reply}`", ephemeral=True)
+          data = await resp.json()
+          result = data["candidates"][0]["content"]["parts"][0]["text"]
+          await interaction.followup.send(f"Gemini OK! Response: `{result}`", ephemeral=True)
         else:
-          await interaction.followup.send(f"OpenRouter error {resp.status}\n```\n{text[:300]}\n```", ephemeral=True)
+          error = await resp.text()
+          await interaction.followup.send(f"Gemini error {resp.status}: `{error[:200]}`", ephemeral=True)
   except Exception as e:
     await interaction.followup.send(f"Exception: `{e}`", ephemeral=True)
 
