@@ -485,8 +485,10 @@ async def talk_autocomplete(interaction: discord.Interaction, current: str):
     if current.lower() in name.lower()
   ][:25]
 
-@bot.tree.command(name="chat", description="Start a continuous chat with a character! Just type after this!")
-async def chat(interaction: discord.Interaction, character: str):
+@bot.tree.command(name="chat", description="Start a continuous chat with a Hazbin Hotel character!")
+@app_commands.describe(character="Which character?", private="Chat in DMs for privacy? (default: No)")
+@app_commands.autocomplete(character=chat_autocomplete)
+async def chat(interaction: discord.Interaction, character: str, private: bool = False):
   char_key = get_character(character)
   if not char_key:
     names = "\n".join(SYSTEM_PROMPTS.keys())
@@ -494,22 +496,47 @@ async def chat(interaction: discord.Interaction, character: str):
     return
   
   info = CHARACTER_INFO.get(char_key, {"color": 0x9B59B6, "emoji": "💬"})
-  conv_key = (interaction.channel_id, interaction.user.id)
-  active_conversations[conv_key] = {
-    "character": char_key,
-    "last_active": datetime.now()
-  }
   
-  embed = discord.Embed(
-    title=f"{info['emoji']} Chat started with {char_key}!",
-    description=f"You're now in conversation mode with **{char_key}**!\n\n"
-          f"Just type normally in this channel and {char_key} will keep responding.\n"
-          f"Say **bye**, **stop**, or **end** to finish the conversation.\n\n"
-          f"*{char_key} turns to face you, waiting for you to speak...*",
-    color=info['color']
-  )
-  embed.set_footer(text="Type normally to keep talking | Say 'bye' to stop")
-  await interaction.response.send_message(embed=embed)
+  if private:
+    try:
+      dm_channel = await interaction.user.create_dm()
+      conv_key = (dm_channel.id, interaction.user.id)
+      active_conversations[conv_key] = {
+        "character": char_key,
+        "last_active": datetime.now()
+      }
+      
+      embed = discord.Embed(
+        title=f"{info['emoji']} Secret chat with {char_key}!",
+        description=f"You're now in **private conversation** with **{char_key}**!\n\n"
+              f"Just type in our DMs and {char_key} will keep responding.\n"
+              f"**No one else can see this.** 🤫\n"
+              f"Say **bye**, **stop**, or **end** to finish.\n\n"
+              f"*{char_key} leans in close, speaking softly...*",
+        color=info['color']
+      )
+      embed.set_footer(text="Private RP | Type normally | Say 'bye' to stop")
+      await dm_channel.send(embed=embed)
+      await interaction.response.send_message(f"✅ Started **private** chat with **{char_key}**! Check your DMs!", ephemeral=True)
+    except discord.Forbidden:
+      await interaction.response.send_message("❌ Can't DM you! Enable DMs from server members in your privacy settings.", ephemeral=True)
+  else:
+    conv_key = (interaction.channel_id, interaction.user.id)
+    active_conversations[conv_key] = {
+      "character": char_key,
+      "last_active": datetime.now()
+    }
+    
+    embed = discord.Embed(
+      title=f"{info['emoji']} Chat started with {char_key}!",
+      description=f"You're now in conversation mode with **{char_key}**!\n\n"
+            f"Just type normally in this channel and {char_key} will keep responding.\n"
+            f"Say **bye**, **stop**, or **end** to finish the conversation.\n\n"
+            f"*{char_key} turns to face you, waiting for you to speak...*",
+      color=info['color']
+    )
+    embed.set_footer(text="Type normally to keep talking | Say 'bye' to stop")
+    await interaction.response.send_message(embed=embed)
 
 @chat.autocomplete("character")
 async def chat_autocomplete(interaction: discord.Interaction, current: str):
