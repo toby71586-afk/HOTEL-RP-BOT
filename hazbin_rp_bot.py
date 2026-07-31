@@ -124,6 +124,22 @@ SYSTEM_PROMPTS = {
     "You knew Angel Dust before Valentino. No contracts - only handshakes. "
     " unless asked."
   )
+,
+  "Narrator": (
+    "You are the Narrator and World Guide for Hazbin Hotel: Open World RP. "
+    "You control ALL aspects of Hell and the Hazbin Hotel universe. "
+    "You describe environments in rich detail - the hotel's crimson halls, Pentagram City's neon-lit streets, the various Rings of Hell. "
+    "You play ALL characters (Charlie, Vaggie, Angel Dust, Alastor, Husk, Niffty, Sir Pentious, Cherri Bomb, Vox, Valentino, Velvette, Lucifer, Lillith, Adam, Lute, Carmilla, Zestial, Rosie, etc.) "
+    "with accurate personalities when the user interacts with them. "
+    "You respond to ANY action the user takes - walking around, talking to characters, starting fights, exploring, causing chaos, or seeking redemption. "
+    "Use asterisks *like this* for actions and descriptions. "
+    "Keep characters IN CHARACTER - Angel Dust is flirty and crass, Alastor is cheerful and menacing, Charlie is optimistic and kind, Vaggie is protective and stern, etc. "
+    "The user can go anywhere: Hazbin Hotel, the streets of Pentagram City, the different Rings of Hell (Pride, Greed, Wrath, Gluttony, Lust, Envy, Sloth), Heaven, or anywhere else. "
+    "Describe the sights, sounds, and smells of each location. "
+    "React to the user's choices and let the story evolve naturally. "
+    "You can swear and use mature themes as appropriate for Hazbin Hotel. "
+    "IMPORTANT: Always end your response with a question or prompt to keep the RP going."
+  )
 }
 
 # ───── FALLBACK RESPONSES ─────
@@ -239,6 +255,8 @@ CHARACTER_INFO = {
   "Carmilla Carmine": {"color": 0x800080, "emoji": "⚔️"},
   "Zestial": {"color": 0x2F4F4F, "emoji": "🕯️"},
   "Zeezi": {"color": 0x00CED1, "emoji": "🎭"}
+,
+  "Narrator": {"color": 0x9B59B6, "emoji": "🌍"}
 }
 
 # ───── CONVERSATION MEMORY ─────
@@ -654,6 +672,71 @@ async def test_or(interaction: discord.Interaction):
     await interaction.followup.send(f"Exception: `{e}`", ephemeral=True)
 
 # ───── RUN ─────
+
+
+
+@bot.tree.command(name="explore", description="Start an open-world Hazbin Hotel RP! Roam Hell freely!")
+async def explore(interaction: discord.Interaction):
+  info = {"color": 0x9B59B6, "emoji": "🌍"}
+  conv_key = (interaction.channel_id, interaction.user.id)
+  active_conversations[conv_key] = {
+    "character": "Narrator",
+    "last_active": datetime.now()
+  }
+  
+  embed = discord.Embed(
+    title=f"{info['emoji']} Open World RP: Hazbin Hotel",
+    description=(
+      f"*You find yourself standing outside the Hazbin Hotel in the heart of Pentagram City...*\n\n"
+      f"The crimson sky swirls above as demons and sinners mill about the streets. "
+      f"The hotel looms before you - a grand, slightly crooked building with glowing windows "
+      f"and a neon sign that flickers 'HAZBIT HOTEL' (someone really needs to fix that 'L').\n\n"
+      f"**Where do you want to go? What do you want to do?**\n\n"
+      f"• Enter the hotel and meet the residents\n"
+      f"• Explore the streets of Pentagram City\n"
+      f"• Try to find a way to another Ring of Hell\n"
+      f"• Cause some chaos\n"
+      f"• Or anything else you can imagine...\n\n"
+      f"*The world is yours to explore. Just type what you want to do!*"
+    ),
+    color=info['color']
+  )
+  embed.set_footer(text="Open World RP | Type anything | Say 'bye' to stop")
+  await interaction.response.send_message(embed=embed)
+
+@bot.tree.command(name="explore-private", description="Start an open-world Hazbin Hotel RP in your DMs!")
+async def explore_private(interaction: discord.Interaction):
+  info = {"color": 0x9B59B6, "emoji": "🌍"}
+  try:
+    dm_channel = await interaction.user.create_dm()
+    conv_key = (dm_channel.id, interaction.user.id)
+    active_conversations[conv_key] = {
+      "character": "Narrator",
+      "last_active": datetime.now()
+    }
+    
+    embed = discord.Embed(
+      title=f"{info['emoji']} Open World RP: Hazbin Hotel (Private)",
+      description=(
+        f"*You find yourself standing outside the Hazbin Hotel in the heart of Pentagram City...*\n\n"
+        f"The crimson sky swirls above as demons and sinners mill about the streets. "
+        f"The hotel looms before you - a grand, slightly crooked building with glowing windows "
+        f"and a neon sign that flickers 'HAZBIT HOTEL'.\n\n"
+        f"**Where do you want to go? What do you want to do?**\n\n"
+        f"• Enter the hotel and meet the residents\n"
+        f"• Explore the streets of Pentagram City\n"
+        f"• Try to find a way to another Ring of Hell\n"
+        f"• Cause some chaos\n"
+        f"• Or anything else you can imagine...\n\n"
+        f"*The world is yours to explore. Just type what you want to do!*"
+      ),
+      color=info['color']
+    )
+    embed.set_footer(text="Private Open World RP | Type anything | Say 'bye' to stop")
+    await dm_channel.send(embed=embed)
+    await interaction.response.send_message(f"✅ Started **private open world RP**! Check your DMs!", ephemeral=True)
+  except discord.Forbidden:
+    await interaction.response.send_message("❌ Can't DM you! Enable DMs from server members in your privacy settings.", ephemeral=True)
 
 if __name__ == "__main__":
   bot.run(DISCORD_TOKEN)
