@@ -751,17 +751,26 @@ async def explore_private(interaction: discord.Interaction):
 
 
 
-@bot.tree.command(name="clear", description="Delete recent messages in this channel (up to 100)")
-@app_commands.describe(amount="How many messages to delete? (default: 20, max: 100)")
+@bot.tree.command(name="clear", description="Delete messages in this channel")
+@app_commands.describe(amount="Number to delete (default: 20, use 0 for ALL, max: 1000)")
 async def clear_messages(interaction: discord.Interaction, amount: int = 20):
-  """Delete recent messages in the current channel."""
-  amount = min(max(amount, 1), 100)
-  
+  """Delete messages in the current channel."""
   await interaction.response.defer(ephemeral=True)
   
   try:
-    deleted = await interaction.channel.purge(limit=amount)
-    await interaction.followup.send(f"🧹 Deleted **{len(deleted)}** messages!", ephemeral=True)
+    if amount == 0:
+      # Delete everything - batch by 1000
+      total = 0
+      while True:
+        deleted = await interaction.channel.purge(limit=1000)
+        total += len(deleted)
+        if len(deleted) < 1000:
+          break
+      await interaction.followup.send(f"🧹 Deleted **{total}** messages (entire channel)!", ephemeral=True)
+    else:
+      amount = min(max(amount, 1), 1000)
+      deleted = await interaction.channel.purge(limit=amount)
+      await interaction.followup.send(f"🧹 Deleted **{len(deleted)}** messages!", ephemeral=True)
   except discord.Forbidden:
     await interaction.followup.send("❌ I don't have permission to delete messages here!", ephemeral=True)
   except discord.HTTPException as e:
