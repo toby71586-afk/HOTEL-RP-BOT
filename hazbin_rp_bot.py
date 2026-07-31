@@ -572,18 +572,16 @@ async def rp_help(interaction: discord.Interaction):
     )
     await interaction.response.send_message(embed=embed)
 
-# ───── RUN ─────
 
-if __name__ == "__main__":
-    bot.run(DISCORD_TOKEN)
+# ───── DEBUG COMMANDS ─────
 
 @bot.tree.command(name="ping", description="Check bot status")
 async def ping(interaction: discord.Interaction):
-    has_key = "✅ YES" if OPENROUTER_KEY else "❌ NO"
+    has_key = "YES" if OPENROUTER_KEY else "NO"
     key_len = len(OPENROUTER_KEY) if OPENROUTER_KEY else 0
     embed = discord.Embed(
-        title="🏓 Pong! Bot Status",
-        description=f"**Online:** ✅\n"
+        title="Pong! Bot Status",
+        description=f"**Online:** Yes\n"
                     f"**AI Key Set:** {has_key}\n"
                     f"**Key Length:** {key_len} chars\n"
                     f"**Model:** `{AI_MODEL}`\n"
@@ -596,11 +594,9 @@ async def ping(interaction: discord.Interaction):
 @bot.tree.command(name="test-or", description="Test OpenRouter API connection")
 async def test_or(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
-    
     if not OPENROUTER_KEY:
-        await interaction.followup.send("❌ No OPENROUTER_KEY set!", ephemeral=True)
+        await interaction.followup.send("No OPENROUTER_KEY set!", ephemeral=True)
         return
-    
     try:
         headers = {
             "Authorization": f"Bearer {OPENROUTER_KEY}",
@@ -623,8 +619,13 @@ async def test_or(interaction: discord.Interaction):
                 if resp.status == 200:
                     data = json.loads(text)
                     reply = data["choices"][0]["message"]["content"].strip()
-                    await interaction.followup.send(f"✅ **OpenRouter OK!**\nResponse: `{reply}`", ephemeral=True)
+                    await interaction.followup.send(f"OpenRouter OK! Response: `{reply}`", ephemeral=True)
                 else:
-                    await interaction.followup.send(f"❌ **OpenRouter error {resp.status}**\n```\n{text[:300]}\n```", ephemeral=True)
+                    await interaction.followup.send(f"OpenRouter error {resp.status}\n```\n{text[:300]}\n```", ephemeral=True)
     except Exception as e:
-        await interaction.followup.send(f"❌ **Exception:** `{e}`", ephemeral=True)
+        await interaction.followup.send(f"Exception: `{e}`", ephemeral=True)
+
+# ───── RUN ─────
+
+if __name__ == "__main__":
+    bot.run(DISCORD_TOKEN)
