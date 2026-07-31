@@ -282,7 +282,7 @@ async def get_ai_response(character_name, user_message, user_id):
   payload = {
     "model": AI_MODEL,
     "messages": messages,
-    "max_tokens": 600,
+    "max_tokens": 900,
     "temperature": 1.0,
     "top_p": 0.95,
     "safety": False,
