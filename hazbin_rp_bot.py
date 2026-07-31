@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 OPENROUTER_KEY = os.getenv("OPENROUTER_KEY")
 # Use the free router - automatically picks working free models
-AI_MODEL = os.getenv("AI_MODEL", "google/gemini-2.0-flash-exp:free")
+AI_MODEL = os.getenv("AI_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free")
 
 intents = discord.Intents.default()
 intents.message_content = True
