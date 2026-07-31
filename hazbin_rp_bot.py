@@ -751,6 +751,73 @@ async def explore_private(interaction: discord.Interaction):
 
 
 
+
+@bot.tree.command(name="bye", description="Say goodbye and clear all bot messages!")
+@app_commands.describe(
+  character="Which character says goodbye? (optional)"
+)
+@app_commands.choices(character=[
+  app_commands.Choice(name="Charlie", value="Charlie"),
+  app_commands.Choice(name="Vaggie", value="Vaggie"),
+  app_commands.Choice(name="Angel Dust", value="Angel Dust"),
+  app_commands.Choice(name="Alastor", value="Alastor"),
+  app_commands.Choice(name="Cherri Bomb", value="Cherri Bomb"),
+  app_commands.Choice(name="Niffty", value="Niffty"),
+  app_commands.Choice(name="Husk", value="Husk"),
+  app_commands.Choice(name="Lucifer", value="Lucifer"),
+  app_commands.Choice(name="Rosie", value="Rosie"),
+])
+async def bye_command(interaction: discord.Interaction, character: str = None):
+  """Say goodbye and clean up the channel."""
+  await interaction.response.defer(ephemeral=False)
+  
+  # Send a goodbye message
+  if character:
+    goodbye = FALLBACK_RESPONSES.get(character, ["Goodbye!"])
+    msg = random.choice(goodbye)
+  else:
+    goodbyes = [
+      "Until next time, darling! 💋",
+      "That's all folks! Catch ya later!",
+      "Bye bye! Don't let the bed bugs bite~",
+      "Stay fabulous, and remember — you're always welcome at the hotel!",
+      "Adios! This spider's gotta spin! 🕷️",
+      "Well, this has been a riot! Ta-ta for now!",
+      "Same time tomorrow? I'll be here. Probably drinking.",
+      "Goodbye, my dear! The hotel doors are always open!",
+      "Au revoir! That's French for 'see ya when I see ya'!",
+    ]
+    msg = random.choice(goodbyes)
+  
+  await interaction.followup.send(msg)
+  
+  # Now delete bot messages
+  try:
+    total = 0
+    while True:
+      deleted = await interaction.channel.purge(limit=100, check=lambda m: m.author == bot.user)
+      total += len(deleted)
+      if len(deleted) < 100:
+        break
+    if total > 0:
+      print(f"[Bye] Cleaned up {total} bot messages")
+  except Exception as e:
+    print(f"[Bye] Cleanup error: {e}")
+
+
+@bot.tree.command(name="sync", description="Force refresh all slash commands (admin only)")
+async def sync_commands(interaction: discord.Interaction):
+  """Sync slash commands manually."""
+  if not interaction.user.guild_permissions.administrator:
+    await interaction.response.send_message("❌ Only admins can sync commands!", ephemeral=True)
+    return
+  await interaction.response.defer(ephemeral=True)
+  try:
+    synced = await bot.tree.sync()
+    await interaction.followup.send(f"✅ Synced **{len(synced)}** slash commands! Try them now.", ephemeral=True)
+  except Exception as e:
+    await interaction.followup.send(f"❌ Sync failed: `{e}`", ephemeral=True)
+
 @bot.tree.command(name="clear", description="Delete messages in this channel")
 @app_commands.describe(
   amount="Number to delete (default: 20, use 0 for ALL, max: 1000)",
